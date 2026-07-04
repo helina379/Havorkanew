@@ -140,25 +140,31 @@ class Constants:
         self.Ug = 0.0
 
 
-# ---- Default schedule, Table 5 & Table 6 (times converted to minutes since 00:00) ----
-# amount_g is TOTAL carbs for the meal (Table 5's "Amount of carbohydrates (g)" column);
-# the model needs a rate (g CHO/min), so app.py divides amount_g / duration_min.
+# ---- Default schedule ----
+# Table 5/6 give real clock times (8AM/1PM/4PM/7PM/11PM) and the actual carb
+# amounts / insulin rates. But the reference "Proposed" plot you were shown
+# was generated using the reference C code's internal offsets (210, 390, 600,
+# 765, 900 minutes from simulation start), not those clock times converted to
+# minutes-since-midnight. Using clock times shifts the whole curve ~4-8 hours
+# later and no longer matches the reference plot's peak locations. So: keep
+# Table 5/6's carb amounts and insulin rates, but use the original code's
+# timing offsets so the shape/timing matches the reference plot.
 DEFAULT_MEALS = [
     # time_min, duration_min, amount_g
-    (480, 10, 124.17),   # 8:00 AM
-    (780, 20, 34.5),     # 1:00 PM
-    (960, 10, 34.5),     # 4:00 PM
-    (1140, 20, 76.95),   # 7:00 PM
-    (1380, 10, 34.5),    # 11:00 PM
+    (210, 10, 124.17),
+    (390, 20, 34.5),
+    (600, 10, 34.5),
+    (765, 20, 76.95),
+    (900, 10, 34.5),
 ]
 
 DEFAULT_INSULIN = [
     # time_min, duration_min, rate_mU_per_min
-    (480, 5, 700.0),   # 8:00 AM
-    (780, 5, 250.0),   # 1:00 PM
-    (960, 5, 200.0),   # 4:00 PM
-    (1140, 5, 490.0),  # 7:00 PM
-    (1380, 5, 210.0),  # 11:00 PM
+    (210, 5, 700.0),
+    (390, 5, 250.0),
+    (600, 5, 200.0),
+    (765, 5, 490.0),
+    (900, 5, 210.0),
 ]
 
 DEFAULT_TOTAL_TIME = 1500   # minutes, matches reference plot x-axis
