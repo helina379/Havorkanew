@@ -1,8 +1,74 @@
 """
 Constants for the Hovorka + glycogenolysis-driven EGP ("Proposed") model.
 
-Parameters are ported 1:1 from Egp6_model.txt (the "Proposed" model source).
-All glucose-related states are in mg/dL (not mmol/L), matching that file.
+Rewritten against the actual paper text/tables (New_Endogenous_Glucose_
+Production_Model PDFs), not just the Arduino/Egp6_model.txt code, after
+cross-checking parameter values. Compared to the earlier Arduino-literal
+port, this fixes several real discrepancies between the code and the paper:
+
+  1. ke: paper Table 4 states ke = 0.138 /min ("fractional elimination rate
+     of insulin from blood"). The Arduino code used 0.02. 0.138 is also the
+     value that makes eq (7)'s I(0) = u(0)/(0.01656*BW) an actual steady
+     state (0.138 * VI-coefficient 0.12 = 0.01656), which only holds together
+     with fix #2 below.
+
+  2. Insulin absorption ODE: paper eq (6) s1(0)=s2(0)=tau_s*u(0) is the
+     steady-state of the CLASSIC 2-compartment delay model:
+         ds1/dt = u - s1/tau_s
+         ds2/dt = (s1 - s2)/tau_s
+         uI = s2/tau_s
+     The Arduino code instead used a different absorption ODE (rate
+     constants k21, kd, ka) that doesn't appear anywhere in the paper's
+     parameter tables. That mismatch is why I(0) never actually held: the
+     code's absorption dynamics don't reduce to steady state at the paper's
+     initial values. Reverted to the classic tau_s form.
+
+  3. Renal threshold: the paper defines TWO distinct thresholds that the
+     Arduino code collapsed into one `Gth=60`:
+       - Gth  = 162 mg/dl  (Table 2, "Renal threshold of glucose", used for
+         glomerular filtration / renal glucose loss -- matches classic
+         Hovorka's 9 mmol/L * 18 = 162 exactly)
+       - Gth1 = 60  mg/dl  (Table 4, "Hypoglycemic threshold", used only in
+         the glucagon secretion (Srh) piecewise formula)
+     Using 60 mg/dl as the renal threshold caused constant renal glucose
+     loss even at/below normal fasting glucose, which is not physiological
+     and not what the paper specifies.
+
+  4. Interstitial glucose initial condition: paper Table 2 gives
+     G1(0) = 70 mg/dl, distinct from G(0) = 90 mg/dl. The Arduino code set
+     Gt(0) = G(0) = 90 (per an explicit code comment), which is contrary to
+     the paper -- the two compartments are meant to start apart, producing a
+     normal, bounded initial transient (not an error).
+
+  5. EGP(0) = EGPb = 1.23 mg/dl/min per Table 3, rather than the code's
+     0.0161*BW (=1.127 for 70kg) -- close but not the paper's stated value.
+
+  6. G6P(0): paper eq (13) G6P(0) = EGPb/kG6P + g6po, computed here from the
+     paper's own EGPb/kG6P/g6po values rather than the hardcoded 41.897 in
+     the Arduino source (numerically close, ~41.68, but derived properly).
+
+  7. Sit/Sid/Sie are the CLASSIC, unscaled values (51.2/10000, 8.2/10000,
+     520/10000). These are confirmed correct because kb1=Sit*ka1,
+     kb2=Sid*ka2, kb3=Sie*ka3 computed from them match the paper's directly
+     stated kb1/kb2/kb3 (Table 4) to 4+ significant figures. My earlier
+     rescaling of Sit/Sid/Sie (to patch the ke=0.02 instability) contradicted
+     the paper and has been fully reverted -- fixes #1 and #2 above resolve
+     the instability without needing to touch Sit/Sid/Sie at all.
+
+STILL OPEN / UNVERIFIED (flagged, not silently changed):
+  - sigma: paper Table 4 lists sigma = 1.714410e-11 in units
+    "ng/L/min/mg/dL/pmol" -- a very different value and a very different unit
+    system (pmol/ng) than the code's sigma=1e-9. Left as the code's original
+    value here since plugging in the paper's number without knowing the
+    intended unit conversion could silently break the glucagon term instead
+    of fixing it. Needs a direct question to your supervisor about the unit
+    system used for I(t)/H(t) in that specific equation.
+  - SRbH (Srhb): paper Table 4 lists SRbH = 0.0007 mg/dl/min, but the
+    derivation in the paper text states SRbH = SRSHb = n*Hb, which computes
+    to 5.8e-8, not 0.0007 (0.0007 exactly equals kp2's value in the row
+    directly above it in Table 4 -- likely a table transcription artifact).
+    Using the analytically-derived n*Hb here; worth confirming visually
+    against the actual PDF page.
 """
 
 
@@ -16,122 +82,70 @@ class Constants:
         self.Mwg = 180.0
 
         # ---- glucose subsystem ----
-        self.F01 = 0.00097 * BW
+        self.F01 = 0.00097 * BW      # Fii in the paper
         self.Vg = 0.16 * BW
         self.k12 = 0.066
-        self.G = 90.0               # mg/dL
-        self.Gb = 90.0               # mg/dL
-        self.Gt = 90.0               # mg/dL (Gt(0) = G(0))
+        self.G = 90.0                 # mg/dL, paper Table 2 G(0)
+        self.Gb = 90.0                 # mg/dL
+        self.Gt = 70.0                 # mg/dL, paper Table 2 G1(0) -- NOT equal to G(0)
 
-        # ---- insulin subsystem ----
+        # ---- insulin subsystem (classic tau_s-based absorption, paper eq 6) ----
         self.Vi = 0.12 * BW
         self.tau_s = 55.0
         self.u_basal = u_basal
         u = u_basal
 
-        # ---- insulin action rate constants (unchanged from source) ----
+        self.S1 = self.tau_s * u          # paper eq 6
+        self.S2 = self.tau_s * u          # paper eq 6
+
+        # ---- insulin action rate constants ----
         self.ka1 = 0.006
         self.ka2 = 0.06
         self.ka3 = 0.03
-        self.ke = 0.02               # NOTE: 0.02 here, not 0.138 (classic Hovorka) -- Egp6 value
+        self.ke = 0.138                    # paper Table 4 (was 0.02 in the Arduino code)
 
-        # ---- renal / F01 saturation ----
-        self.kp2 = 0.0007
-        self.ke1 = 0.007
-        self.Gth = 60.0
-
-        # ---- insulin absorption (subcutaneous) ----
-        self.k21 = 0.045
-        self.kd = 0.0021
-        self.ka_sc = 0.02             # NOTE: called `ka` in the C source; renamed to avoid
-                                       # clashing with ka1/ka2/ka3 (insulin action rates)
-
-        # =====================================================================
-        # RECALIBRATION: the source file lowers ke (0.138 -> 0.02) for a slower
-        # insulin-clearance patient, but keeps the classic Sit/Sid/Sie and the
-        # classic I(0)=u/(0.01656*BW) initializer. Those were only correct for
-        # ke=0.138. Left as-is, the true insulin steady state is ~6x higher
-        # than the initializer, which pushes x3 past 1 (EGP suppression term
-        # (1-x3) goes negative) and the fasting state collapses instead of
-        # holding at Gb. Fix: derive every steady state analytically instead of
-        # reusing the classic magic numbers.
-        # =====================================================================
-
-        # --- 1) true insulin steady state under THIS ke/kd/ka_sc/k21/tau_s ---
-        S1_ss = u / self.k21
-        S2_ss = u / (self.kd + self.ka_sc)
-        Ui_ss = S2_ss / self.tau_s
-        I_ss = Ui_ss / (self.Vi * self.ke)
-
-        # --- 2) classic-model insulin steady state (what Sit/Sid/Sie were
-        #        actually calibrated against) ---
-        I_ss_classic = u / (0.01656 * BW)
-
-        Sit_classic = 51.2 / 10000
-        Sid_classic = 8.2 / 10000
-        Sie_classic = 520 / 10000
-
-        # target x_ss values = what the classic, physiologically-sane model
-        # would produce; rescale Sit/Sid/Sie so THIS model reaches the same
-        # x_ss target even though its I_ss is different
-        target_x1_ss = Sit_classic * I_ss_classic
-        target_x2_ss = Sid_classic * I_ss_classic
-        target_x3_ss = Sie_classic * I_ss_classic
-
-        self.Sit = target_x1_ss / I_ss
-        self.Sid = target_x2_ss / I_ss
-        self.Sie = target_x3_ss / I_ss
-
+        self.Sit = 51.2 / 10000            # classic, unscaled -- confirmed via kb1 cross-check
+        self.Sid = 8.2 / 10000
+        self.Sie = 520 / 10000
         self.kb1 = self.Sit * self.ka1
         self.kb2 = self.Sid * self.ka2
         self.kb3 = self.Sie * self.ka3
 
-        # --- 3) set insulin subsystem states to their (now self-consistent)
-        #        steady state ---
-        self.I = I_ss
-        self.S1 = S1_ss
-        self.S2 = S2_ss
-        self.x1 = target_x1_ss
-        self.x2 = target_x2_ss
-        self.x3 = target_x3_ss
+        self.I = u / (0.01656 * BW)        # paper eq 7 -- now a true steady state (see fixes 1,2)
+        self.x1 = 0.30898 * u / BW         # paper eq 8
+        self.x2 = 0.04951 * u / BW          # paper eq 9
+        self.x3 = 3.2206 * u / BW          # paper eq 10
 
-        # --- 4) glycogenolysis / catecholamine-driven EGP extension ---
+        # ---- renal / F01 saturation ----
+        self.kp2 = 0.0007
+        self.ke1 = 0.007
+        self.Gth = 162.0     # renal threshold (Table 2) -- was incorrectly 60 in the Arduino code
+        self.Gth1 = 60.0     # hypoglycemic threshold (Table 4), used only in the Srh formula
+
+        # ---- glycogenolysis / glucagon-driven EGP extension ----
         self.K6gp = 0.034
         self.Sc = 297.0
-        self.cth = 8 / 1_000_000
+        self.cth = 8 / 1_000_000     # Hth, glucagon threshold
         self.tD = 59.9
         self.z = 23.24
+        self.Ggng1b = 0.495
+        self.Ggg1b = 0.7425
 
-        Ggng1b_ref = 0.495
-        Ggg1b_ref = 0.7425
+        EGPb = 1.23
+        g6po = 5.50
+        self.EGP = EGPb                          # paper Table 3 (was 0.0161*BW in the Arduino code)
+        self.G6p = EGPb / self.K6gp + g6po        # paper eq 13
 
-        # required EGP (converted, mg/dL/min-equivalent) to balance basal
-        # utilization + renal loss exactly at G = Gb (F01uc/Erc are BW-invariant
-        # by construction: F01 and Vg both scale with BW so the ratio cancels)
-        F01uc_at_Gb = 18 * self.F01 / self.Vg      # G=Gb=90 >= 81 saturation branch
-        Erc_at_Gb = self.ke1 * (self.Gb - self.Gth)  # G=Gb=90 >= Gth branch
-        target_EGPc = F01uc_at_Gb + Erc_at_Gb
-
-        target_EGP_ss = target_EGPc * self.Vg / (18 * (1 - self.x3))
-
-        scale_egp = target_EGP_ss / (Ggg1b_ref + Ggng1b_ref)
-        self.Ggng1b = Ggng1b_ref * scale_egp
-        self.Ggg1b = Ggg1b_ref * scale_egp
-
-        self.G6p = target_EGP_ss / self.K6gp   # steady state of dG6p/dt = -K6gp*G6p + Ggg1b + Ggng1b
-        self.EGP = target_EGP_ss
-
-        # ---- counter-regulatory hormone (glucagon-ish) secretion ----
+        # ---- glucagon (H(t) in the paper; called `c` in the Arduino code) ----
         self.n = 0.01
-        self.cb = 58 / 10_000_000
+        self.cb = 58 / 10_000_000   # Hb
         self.rho = 0.86
-        self.sigma = 0.01 / 10_000_000
-        self.S_glyc = 0.98 / 10_000_000   # NOTE: called `S` in the C source; renamed to avoid
-                                           # clashing with S1/S2 (insulin subcutaneous states)
-        self.c = self.cb                  # initial catecholamine-pool state
+        self.sigma = 0.01 / 10_000_000   # UNVERIFIED -- see module docstring
+        self.S_glyc = 0.98 / 10_000_000  # delta in the paper, matches code
+        self.c = self.cb                 # H(0) = Hb
         self.Srhs = 0.0
         self.Srhd = 0.0
-        self.Srhb = 0.0
+        self.Srhb = self.n * self.cb     # SRbH = n*Hb per the paper's derivation
         self.Srh = 0.0
 
         # ---- meal absorption states ----
