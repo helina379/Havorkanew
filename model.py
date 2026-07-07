@@ -114,7 +114,7 @@ class Body:
             c.Srhs = c.rho * (c.Srhs - c.Srhb)
         else:
             c.Srhb = c.n * c.cb
-        c.Srhs = c.rho * (c.Srhs - _max0(c.sigma * (c.Gth - c.G) / (c.I + 1) + c.Srhb))
+        c.Srhs = c.rho * (c.Srhs - _max0(c.sigma * (c.Gth1 - c.G) / (c.I + 1) + c.Srhb))
 
         c.Srhd = c.S_glyc * _max0(-dGt_scaled)
         c.Srh = c.Srhs + c.Srhd
@@ -137,19 +137,22 @@ class Body:
         c.EGP = new_EGP
 
         # ---- insulin (subcutaneous absorption), RK4 ----
-        S1, S2, k21, kd, ka_sc = c.S1, c.S2, c.k21, c.kd, c.ka_sc
+        # classic tau_s-based 2-compartment delay model (paper eq 6), NOT the
+        # k21/kd/ka model that was in the Arduino source -- see module
+        # docstring in constants.py for why.
+        S1, S2, tau_s = c.S1, c.S2, c.tau_s
 
-        rki11 = step * (u - S1 * k21)
-        rki21 = step * (k21 * S1 - S2 * (kd + ka_sc))
+        rki11 = step * (u - S1 / tau_s)
+        rki21 = step * ((S1 - S2) / tau_s)
 
-        rki12 = step * (u - (S1 + rki11 / 2) * k21)
-        rki22 = step * (k21 * (S1 + rki11 / 2) - (kd + ka_sc) * (S2 + rki21 / 2))
+        rki12 = step * (u - (S1 + rki11 / 2) / tau_s)
+        rki22 = step * (((S1 + rki11 / 2) - (S2 + rki21 / 2)) / tau_s)
 
-        rki13 = step * (u - (S1 + rki12 / 2) * k21)
-        rki23 = step * (k21 * (S1 + rki12 / 2) - (kd + ka_sc) * (S2 + rki22 / 2))
+        rki13 = step * (u - (S1 + rki12 / 2) / tau_s)
+        rki23 = step * (((S1 + rki12 / 2) - (S2 + rki22 / 2)) / tau_s)
 
-        rki14 = step * (u - (S1 + rki13) * k21)
-        rki24 = step * (k21 * (S1 + rki13) - (kd + ka_sc) * (S2 + rki23))
+        rki14 = step * (u - (S1 + rki13) / tau_s)
+        rki24 = step * (((S1 + rki13) - (S2 + rki23)) / tau_s)
 
         Ui = c.S2 / c.tau_s
         c.S1 = c.S1 + (rki11 + 2 * rki12 + 2 * rki13 + rki14) / 6
