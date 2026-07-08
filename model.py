@@ -1,26 +1,4 @@
-"""
-Proposed model: Hovorka glucose/insulin kinetics extended with a
-glycogenolysis / catecholamine-driven EGP subsystem.
 
-This is a line-by-line port of the `rungeKutta4Solver_custom()` function in
-Egp6_model.txt, generalized to accept arbitrary meal and insulin schedules.
-
-IMPORTANT - faithful bug reproduction:
-The original C source has an unbraced if/else around Srh:
-
-    if (G>=Gb)
-    Srhs=rho*(Srhs-Srhb);
-    else
-    Srhb=n*cb;
-    Srhs=rho*(Srhs - max(sigma*(Gth-G)/(I+1)+Srhb ,0));
-
-In C, only `Srhb=n*cb;` belongs to the else-branch. The final `Srhs=...` line
-runs UNCONDITIONALLY every step, so the `if(G>=Gb)` assignment to Srhs is
-always immediately overwritten and never actually has any effect. That
-behavior is intentionally preserved below (per your call) so this matches
-the reference "Proposed" plot exactly. It's not fixed to be "correct" if/else
-behavior.
-"""
 
 import math
 from constants import Constants
