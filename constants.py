@@ -30,7 +30,7 @@ class Constants:
         self.ka1 = 0.006
         self.ka2 = 0.06
         self.ka3 = 0.03
-        self.ke = 0.138                    # paper Table 4 (was 0.02 in the Arduino code)
+        self.ke = 0.02                   # paper Table 4 (was 0.02 in the Arduino code)
 
         self.Sit = 51.2 / 10000            # classic, unscaled -- confirmed via kb1 cross-check
         self.Sid = 8.2 / 10000
@@ -47,7 +47,7 @@ class Constants:
         # ---- renal / F01 saturation ----
         self.kp2 = 0.0007
         self.ke1 = 0.007
-        self.Gth = 162.0     # renal threshold (Table 2) -- was incorrectly 60 in the Arduino code
+        self.Gth = 60     # renal threshold (Table 2) -- was incorrectly 60 in the Arduino code
         self.Gth1 = 60.0     # hypoglycemic threshold (Table 4), used only in the Srh formula
 
         # ---- glycogenolysis / glucagon-driven EGP extension ----
@@ -73,7 +73,7 @@ class Constants:
         self.c = self.cb                 # H(0) = Hb
         self.Srhs = 0.0
         self.Srhd = 0.0
-        self.Srhb = self.n * self.cb     # SRbH = n*Hb per the paper's derivation
+        self.Srhb = 0     # SRbH = n*Hb per the paper's derivation
         self.Srh = 0.0
 
         # ---- meal absorption states ----
