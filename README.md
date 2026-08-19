@@ -1,9 +1,3 @@
-# Hovorka Glucose-Insulin Simulator
-
-A Python/Streamlit implementation of the Hovorka glucose-insulin model, extended with an endogenous glucose production (EGP) term driven by glucagon-mediated glycogenolysis. Developed as part of an undergraduate research project (URF) at Thapar Institute of Engineering and Technology, under the supervision of Dr. Sangeeta Kamboj and Dr. Sahaj Saxena, with an IEEE publication as the end goal.
-
-This began as a port of an existing Arduino/C reference implementation. While porting it, I found several places where that implementation didn't actually match the paper it was based on, so I reworked the affected parameters against the paper's own equations and tables. Details are below and in `constants.py`.
-
 ## Contents
 
 - `app.py` — Streamlit interface: patient/simulation inputs, plotting, CSV export
